@@ -12,6 +12,8 @@ export default function Index() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [isPlaying, setIsPlaying] = useState(false);
   const { toast } = useToast();
 
   const handleGenerate = async () => {
@@ -26,6 +28,7 @@ export default function Index() {
 
     setIsGenerating(true);
     setProgress(0);
+    setVideoUrl('');
 
     const interval = setInterval(() => {
       setProgress((prev) => {
@@ -33,14 +36,30 @@ export default function Index() {
           clearInterval(interval);
           return prev;
         }
-        return prev + 10;
+        return prev + 5;
       });
-    }, 800);
+    }, 1000);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch('https://functions.poehali.dev/b17b56b2-1444-4f0a-8579-5c93cfae07ea', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt })
+      });
+
       clearInterval(interval);
+      
+      if (!response.ok) {
+        throw new Error('Ошибка генерации видео');
+      }
+
+      const data = await response.json();
       setProgress(100);
+      
       setTimeout(() => {
+        setVideoUrl(data.videoUrl);
         setIsGenerating(false);
         setProgress(0);
         toast({
@@ -48,7 +67,28 @@ export default function Index() {
           description: "Ваше реалистичное видео успешно сгенерировано"
         });
       }, 500);
-    }, 8000);
+    } catch (error) {
+      clearInterval(interval);
+      setIsGenerating(false);
+      setProgress(0);
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Не удалось сгенерировать видео. Проверьте API ключ.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handlePlayPause = () => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      if (isPlaying) {
+        videoElement.pause();
+      } else {
+        videoElement.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
   };
 
   return (
@@ -102,6 +142,29 @@ export default function Index() {
                 </div>
               )}
 
+              {videoUrl && (
+                <div className="relative rounded-xl overflow-hidden bg-black animate-fade-in">
+                  <video 
+                    src={videoUrl} 
+                    className="w-full aspect-video"
+                    controls
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={() => setIsPlaying(false)}
+                  />
+                  {!isPlaying && (
+                    <button
+                      onClick={handlePlayPause}
+                      className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/30 transition-colors group"
+                    >
+                      <div className="w-20 h-20 rounded-full gradient-bg flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icon name="Play" className="text-white ml-1" size={40} />
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerating}
@@ -114,7 +177,7 @@ export default function Index() {
                   </>
                 ) : (
                   <>
-                    <Icon name="Play" className="mr-2" size={24} />
+                    <Icon name="Sparkles" className="mr-2" size={24} />
                     Генерировать видео
                   </>
                 )}
